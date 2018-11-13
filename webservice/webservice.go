@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,8 +12,11 @@ import (
 	"regexp"
 )
 
-var DATA_DIR = "data"
-var DEFAULT_PERMS os.FileMode = 0744
+const (
+	DATA_DIR                  = "data"
+	DEFAULT_PERMS os.FileMode = 0744
+)
+
 var VALID_URL_PATH = regexp.MustCompile("^/(upload|download)/([a-zA-Z0-9\\.]+)$")
 
 func main() {
@@ -34,19 +38,15 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 func uploadHandler(w http.ResponseWriter, r *http.Request, name string) {
 	fmt.Printf("Uploading file %q\n", name)
 	logRequestData(r)
-	var content []byte
-	_, err := r.Body.Read(content)
-	if err != nil {
-		fmt.Printf("Failed to read body: %s\n", err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	fmt.Printf("Received %d bytes of data\n", len(content))
-	err = ioutil.WriteFile(getFilePath(name), content, DEFAULT_PERMS)
+	file, err := os.Create(getFilePath(name))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+	n, err := io.Copy(file, r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	fmt.Printf("Received %d bytes of data\n", n)
 }
 
 func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
@@ -64,7 +64,7 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Type", "text/plain")
 	w.Write(content)
 }
 
