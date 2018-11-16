@@ -10,17 +10,16 @@ import (
 	"os"
 	"path"
 	"regexp"
+
+	"github.com/uwalexbub/webstore/util"
 )
 
-const (
-	DATA_DIR                  = "data"
-	DEFAULT_PERMS os.FileMode = 0744
-)
+const DATA_DIR = "data"
 
-var VALID_URL_PATH = regexp.MustCompile("^/(upload|download)/([a-zA-Z0-9\\.]+)$")
+var VALID_URL_PATH = regexp.MustCompile("^/(upload|download)/([a-zA-Z0-9\\.\\-]+)$")
 
 func main() {
-	ensureDirExists(DATA_DIR)
+	util.EnsureDirExists(DATA_DIR)
 	http.HandleFunc("/upload/", makeHandler(uploadHandler))
 	http.HandleFunc("/download/", makeHandler(downloadHandler))
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -52,7 +51,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, name string) {
 func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
 	fmt.Printf("Downloading file %q\n", name)
 	path := getFilePath(name)
-	if !fileExists(path) {
+	if !util.FileExists(path) {
 		fmt.Printf("File %q does not exist\n", path)
 		http.NotFound(w, r)
 		return
