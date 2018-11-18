@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/uwalexbub/webstore/util"
@@ -34,7 +37,26 @@ func main() {
 	util.EnsureDirExists(UPLOAD_DIR)
 	util.EnsureDirExists(DOWNLOAD_DIR)
 	initRandSeed()
-	validateService()
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go validateServiceConcurrent(&wg)
+	}
+
+	wg.Wait()
+}
+
+func validateServiceConcurrent(wg *sync.WaitGroup) {
+	name := getUniqueValue("medium") + ".txt"
+	uploadPath := path.Join(UPLOAD_DIR, name)
+	generateFile(uploadPath, medium)
+	uploadFile(uploadPath)
+	savePath := path.Join(DOWNLOAD_DIR, name)
+	downloadFile(name, savePath)
+
+	assertFilesAreEqual(uploadPath, savePath)
+	wg.Done()
 }
 
 func validateService() {
@@ -44,70 +66,79 @@ func validateService() {
 	uploadFile(uploadPath)
 	savePath := path.Join(DOWNLOAD_DIR, name)
 	downloadFile(name, savePath)
+
+	assertFilesAreEqual(uploadPath, savePath)
 }
 
-func printUniqueValues() {
-	for i := 0; i < 20; i++ {
-		v := getUniqueValue("test_")
-		fmt.Printf("Unique value = %s\n", v)
+func assertFilesAreEqual(uploadPath string, downloadPath string) {
+	uploadBytes, err := ioutil.ReadFile(uploadPath)
+	exitIfError(err)
+
+	downloadBytes, err := ioutil.ReadFile(downloadPath)
+	exitIfError(err)
+
+	if len(uploadBytes) != len(downloadBytes) {
+		log.Fatalf("Files %q and %q are not equal in size", uploadPath, downloadPath)
 	}
+
+	for i := 0; i < len(uploadBytes); i++ {
+		if uploadBytes[i] != downloadBytes[i] {
+			log.Fatalf("Files %q and %q are not equal in content", uploadPath, downloadPath)
+		}
+	}
+
+	log.Printf("Files %q and %q are equal!\n", uploadPath, downloadPath)
 }
 
 func uploadFile(path string) {
 	file, err := os.Open(path)
-	if err != nil {
-		fmt.Printf("ERROR: %s\n", err.Error())
-		return
-	}
+	exitIfError(err)
 	defer file.Close()
 
 	name := filepath.Base(path)
 	url := fmt.Sprintf("%s/%s/%s", ENDPOINT, "upload", name)
-	fmt.Printf("Uploading file to %s\n", url)
+	log.Printf("Uploading file to %s\n", url)
+
 	resp, err := http.Post(url, CONTENT_TYPE, file)
-	if err != nil {
-		fmt.Printf("ERROR: %s\n", err.Error())
-		return
-	}
+	exitIfError(err)
 	defer resp.Body.Close()
-	fmt.Printf("Response status: %s\n", resp.Status)
+
+	log.Printf("Response status: %s\n", resp.Status)
 }
 
 func downloadFile(name string, savePath string) {
 	url := fmt.Sprintf("%s/%s/%s", ENDPOINT, "download", name)
-	fmt.Printf("Downloading file from %s\n", url)
+	log.Printf("Downloading file from %s\n", url)
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Printf("Failed to download file: %s\n", err.Error())
-		return
+		log.Fatalf("Failed to download file: %s\n", err.Error())
 	}
 
 	file, err := os.Create(savePath)
 	if err != nil {
-		fmt.Printf("Failed to create file: %s\n", err.Error())
-		return
+		log.Fatalf("Failed to create file: %s\n", err.Error())
 	}
 	_, err = io.Copy(file, resp.Body)
 	if err != nil {
-		fmt.Printf("Failed to save file: %s\n", err.Error())
-		return
+		log.Fatalf("Failed to save file: %s\n", err.Error())
 	}
 	defer resp.Body.Close()
-	fmt.Printf("Response status: %s\n", resp.Status)
+
+	log.Printf("Response status: %s\n", resp.Status)
 }
 
 // Generates file with random data of specified size and returns its name.
 func generateFile(path string, size FileSize) {
 	file, err := os.Create(path)
 	if err != nil {
-		fmt.Printf("Failed to create file: %s\n", err.Error())
+		log.Fatalf("Failed to create file: %s\n", err.Error())
 	}
+
 	data := generateData(int(size))
 	file.Write(data)
 	if err != nil {
-		fmt.Printf("Failed to save file: %s\n", err.Error())
+		log.Fatalf("Failed to save file: %s\n", err.Error())
 	}
-
 	defer file.Close()
 }
 
@@ -138,4 +169,10 @@ func getUniqueValue(prefix string) string {
 
 func initRandSeed() {
 	rand.Seed(time.Now().UnixNano())
+}
+
+func exitIfError(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }

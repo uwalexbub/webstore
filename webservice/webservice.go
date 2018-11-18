@@ -35,8 +35,9 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 }
 
 func uploadHandler(w http.ResponseWriter, r *http.Request, name string) {
-	fmt.Printf("Uploading file %q\n", name)
-	logRequestData(r)
+	log.Printf("Processing upload request for file %q\n", name)
+
+	//logRequestData(r)
 	file, err := os.Create(getFilePath(name))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -45,14 +46,14 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, name string) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	fmt.Printf("Received %d bytes of data\n", n)
+	log.Printf("Received %d bytes of data\n", n)
 }
 
 func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
-	fmt.Printf("Downloading file %q\n", name)
+	log.Printf("Processing download request for file %q\n", name)
 	path := getFilePath(name)
 	if !util.FileExists(path) {
-		fmt.Printf("File %q does not exist\n", path)
+		log.Printf("File %q does not exist\n", path)
 		http.NotFound(w, r)
 		return
 	}
