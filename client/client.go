@@ -2,133 +2,149 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/uwalexbub/webstore/util"
 )
 
-const (
-	ENDPOINT     = "http://localhost:8080"
-	UPLOAD_DIR   = "upload"   // where files are generated and uploaded from
-	DOWNLOAD_DIR = "download" // where downloaded files are stored
-	CONTENT_TYPE = "text/plain"
-)
+const CONTENT_TYPE = "text/plain"
 
-type FileSize int
-
-const (
-	small  FileSize = 1 * 1024 * 1024   // 1 MB
-	medium          = 10 * 1024 * 1024  // 10 MB
-	big             = 100 * 1024 * 1024 // 100 MB
-)
+var FILE_SIZES = map[string]int{
+	"small":  1 * 1024 * 1024,   // 1 MB
+	"medium": 10 * 1024 * 1024,  // 10 MB
+	"large":  100 * 1024 * 1024, // 100 MB
+}
 
 const asciiLetters = "abcdefghijklmnopqrstuvwxyz"
 
 func main() {
-	util.EnsureDirExists(UPLOAD_DIR)
-	util.EnsureDirExists(DOWNLOAD_DIR)
 	initRandSeed()
+	parseCmd()
+}
+
+func parseCmd() {
+	// The first element in os.Args array is always the executable itself
+	if len(os.Args) < 2 {
+		printUsageAndExit()
+	}
+
+	cmd := os.Args[1]
+	remainingArgs := os.Args[2:]
+	if cmd == "genfiles" {
+		cmdGenerateAllFiles(remainingArgs)
+	} else if cmd == "functest" {
+		cmdRunFunctionalTest()
+	} else if cmd == "loadtest" {
+		cmdRunLoadTests(remainingArgs)
+	} else {
+		printUsageAndExit()
+	}
+}
+
+func printUsageAndExit() {
+	fmt.Println(`Please specify one of the following arguments:
+genfiles: generates test files
+functest: runs a single functional test to validate the webservice
+loadtest: runs load tests against the webservice`)
+	os.Exit(1)
+}
+
+func cmdGenerateAllFiles(args []string) {
+	if len(args) != 3 {
+		fmt.Println(`Unrecognized arguments. Usage of gen cmd is:
+genfiles <dirpath> <size> <count>
+
+<dirpath>: path to directory where files will be created.
+<size>:    label of size of files to be created. Valid values are 'small', 'medium', 'large'.
+<count>:   how many files to create. `)
+		os.Exit(1)
+	}
+	dirPath := args[0]
+	sizeLabel := args[1]
+	size := FILE_SIZES[sizeLabel]
+	count, _ := strconv.Atoi(args[2])
+
+	log.Println("Generating files...")
+	util.EnsureDirExists(dirPath)
+	for i := 0; i < count; i++ {
+		name := getUniqueValue(sizeLabel) + ".txt"
+		filePath := path.Join(dirPath, name)
+		log.Printf("Generating file %q with %d bytes of random data", filePath, size)
+		generateFile(filePath, size)
+	}
+}
+
+func cmdRunFunctionalTest() {
+	log.Println("Running a functional test...")
+	validateService()
+}
+
+func cmdRunLoadTests(args []string) {
+	if len(args) != 1 {
+		fmt.Println(`Unrecognized arguments. Usage of loadtest cmd is:
+laodtest <dirname>
+where <dirname> is name of directory containing files for load tests`)
+		os.Exit(1)
+	}
+	dirPath := args[0]
+	log.Println("Running load tests...")
 
 	wg := sync.WaitGroup{}
-	for i := 0; i < 10; i++ {
+	files, err := ioutil.ReadDir(dirPath)
+	exitIfError(err)
+
+	for _, fileInfo := range files {
 		wg.Add(1)
-		go validateServiceConcurrent(&wg)
+		path := filepath.Join(dirPath, fileInfo.Name())
+		go runSingleTestAsync(path, &wg)
 	}
 
 	wg.Wait()
 }
 
-func validateServiceConcurrent(wg *sync.WaitGroup) {
-	name := getUniqueValue("medium") + ".txt"
-	uploadPath := path.Join(UPLOAD_DIR, name)
-	generateFile(uploadPath, medium)
-	uploadFile(uploadPath)
-	savePath := path.Join(DOWNLOAD_DIR, name)
-	downloadFile(name, savePath)
-
-	assertFilesAreEqual(uploadPath, savePath)
+func runSingleTestAsync(path string, wg *sync.WaitGroup) {
+	runSingleTest(path)
 	wg.Done()
 }
 
-func validateService() {
-	name := getUniqueValue("small") + ".txt"
-	uploadPath := path.Join(UPLOAD_DIR, name)
-	generateFile(uploadPath, small)
-	uploadFile(uploadPath)
-	savePath := path.Join(DOWNLOAD_DIR, name)
-	downloadFile(name, savePath)
-
-	assertFilesAreEqual(uploadPath, savePath)
-}
-
-func assertFilesAreEqual(uploadPath string, downloadPath string) {
-	uploadBytes, err := ioutil.ReadFile(uploadPath)
-	exitIfError(err)
-
-	downloadBytes, err := ioutil.ReadFile(downloadPath)
-	exitIfError(err)
-
-	if len(uploadBytes) != len(downloadBytes) {
-		log.Fatalf("Files %q and %q are not equal in size", uploadPath, downloadPath)
-	}
-
-	for i := 0; i < len(uploadBytes); i++ {
-		if uploadBytes[i] != downloadBytes[i] {
-			log.Fatalf("Files %q and %q are not equal in content", uploadPath, downloadPath)
-		}
-	}
-
-	log.Printf("Files %q and %q are equal!\n", uploadPath, downloadPath)
-}
-
-func uploadFile(path string) {
-	file, err := os.Open(path)
-	exitIfError(err)
-	defer file.Close()
-
+func runSingleTest(path string) {
+	invokeServiceUpload(path)
 	name := filepath.Base(path)
-	url := fmt.Sprintf("%s/%s/%s", ENDPOINT, "upload", name)
-	log.Printf("Uploading file to %s\n", url)
+	actualContent := invokeServiceDownload(name)
 
-	resp, err := http.Post(url, CONTENT_TYPE, file)
-	exitIfError(err)
-	defer resp.Body.Close()
-
-	log.Printf("Response status: %s\n", resp.Status)
+	assertFileContent(path, actualContent)
 }
 
-func downloadFile(name string, savePath string) {
-	url := fmt.Sprintf("%s/%s/%s", ENDPOINT, "download", name)
-	log.Printf("Downloading file from %s\n", url)
-	resp, err := http.Get(url)
-	if err != nil {
-		log.Fatalf("Failed to download file: %s\n", err.Error())
-	}
+func validateService() {
+	dirPath := "tmp"
+	util.EnsureDirExists(dirPath)
+	sizeLabel := "small"
+	name := getUniqueValue(sizeLabel) + ".txt"
+	filePath := path.Join(dirPath, name)
+	generateFile(filePath, FILE_SIZES[sizeLabel])
 
-	file, err := os.Create(savePath)
-	if err != nil {
-		log.Fatalf("Failed to create file: %s\n", err.Error())
-	}
-	_, err = io.Copy(file, resp.Body)
-	if err != nil {
-		log.Fatalf("Failed to save file: %s\n", err.Error())
-	}
-	defer resp.Body.Close()
+	runSingleTest(filePath)
+}
 
-	log.Printf("Response status: %s\n", resp.Status)
+func assertFileContent(expectedFilePath string, actual []byte) {
+	expected, err := ioutil.ReadFile(expectedFilePath)
+	exitIfError(err)
+
+	if !util.AssertArraysAreEqual(expected, actual) {
+		log.Fatalf("Content returned from webservice does not match content of previously uploaded file %q", expectedFilePath)
+	}
 }
 
 // Generates file with random data of specified size and returns its name.
-func generateFile(path string, size FileSize) {
+func generateFile(path string, size int) {
 	file, err := os.Create(path)
 	if err != nil {
 		log.Fatalf("Failed to create file: %s\n", err.Error())

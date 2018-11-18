@@ -3,11 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"path"
 	"regexp"
 
@@ -17,6 +15,8 @@ import (
 const DATA_DIR = "data"
 
 var VALID_URL_PATH = regexp.MustCompile("^/(upload|download)/([a-zA-Z0-9\\.\\-]+)$")
+
+const ENCRYPTION_KEY = "This is a secret"
 
 func main() {
 	util.EnsureDirExists(DATA_DIR)
@@ -36,17 +36,19 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 
 func uploadHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Printf("Processing upload request for file %q\n", name)
-
 	//logRequestData(r)
-	file, err := os.Create(getFilePath(name))
+	content, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	n, err := io.Copy(file, r.Body)
+	encryptedContent := util.Encrypt(content, []byte(ENCRYPTION_KEY))
+
+	err = ioutil.WriteFile(getFilePath(name), encryptedContent, util.DEFAULT_PERMS)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	log.Printf("Received %d bytes of data\n", n)
+
+	log.Printf("Encrypted and saved %q\n", name)
 }
 
 func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
@@ -64,8 +66,9 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
 		return
 	}
 
+	decryptedContent := util.Decrypt(content, []byte(ENCRYPTION_KEY))
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write(content)
+	w.Write(decryptedContent)
 }
 
 func logRequestData(r *http.Request) {
