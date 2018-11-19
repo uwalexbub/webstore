@@ -28,7 +28,7 @@ func invokeServiceUpload(path string) {
 	defer resp.Body.Close()
 }
 
-func invokeServiceDownload(name string) []byte {
+func invokeServiceDownload(name string) ([]byte, error) {
 	url := fmt.Sprintf("%s/%s/%s", ENDPOINT, "download", name)
 	log.Printf("Downloading file from %s\n", url)
 	resp, err := http.Get(url)
@@ -37,7 +37,8 @@ func invokeServiceDownload(name string) []byte {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Unexpected return status: %s\n", resp.Status)
+		err := fmt.Errorf("Unexpected return status: %s\n", resp.Status)
+		return nil, err
 	}
 
 	content, err := ioutil.ReadAll(resp.Body)
@@ -46,5 +47,5 @@ func invokeServiceDownload(name string) []byte {
 	}
 	defer resp.Body.Close()
 
-	return content
+	return content, nil
 }

@@ -40,7 +40,7 @@ func Decrypt(ciphertext []byte, key []byte) []byte {
 	}
 
 	if len(ciphertext) < aes.BlockSize {
-		log.Fatal("Ciphertext is less then AES block size")
+		log.Fatal("Ciphertext is less than AES block size")
 	}
 
 	initVector := ciphertext[:aes.BlockSize]

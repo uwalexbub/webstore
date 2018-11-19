@@ -88,22 +88,26 @@ func cmdRunFunctionalTest() {
 }
 
 func cmdRunLoadTests(args []string) {
-	if len(args) != 1 {
+	if len(args) != 2 {
 		fmt.Println(`Unrecognized arguments. Usage of loadtest cmd is:
-laodtest <dirname>
-where <dirname> is name of directory containing files for load tests`)
+laodtest <dirpath> <times>
+
+<dirpath>: path to directory containing files for load tests
+<times>: how many tests to run in parallel (with randomly picked file every time)`)
 		os.Exit(1)
 	}
 	dirPath := args[0]
-	log.Println("Running load tests...")
+	times, _ := strconv.Atoi(args[1])
 
-	wg := sync.WaitGroup{}
 	files, err := ioutil.ReadDir(dirPath)
+	log.Printf("Running %d load tests using %d files from directory %q", times, len(files), dirPath)
 	exitIfError(err)
-
-	for _, fileInfo := range files {
+	wg := sync.WaitGroup{}
+	// Pick files randomly
+	for i := 0; i < times; i++ {
+		randomIndex := rand.Intn(len(files))
+		path := filepath.Join(dirPath, files[randomIndex].Name())
 		wg.Add(1)
-		path := filepath.Join(dirPath, fileInfo.Name())
 		go runSingleTestAsync(path, &wg)
 	}
 
@@ -111,16 +115,23 @@ where <dirname> is name of directory containing files for load tests`)
 }
 
 func runSingleTestAsync(path string, wg *sync.WaitGroup) {
-	runSingleTest(path)
+	runSingleTest(path, false)
 	wg.Done()
 }
 
-func runSingleTest(path string) {
+func runSingleTest(path string, forceSuccess bool) {
 	invokeServiceUpload(path)
 	name := filepath.Base(path)
-	actualContent := invokeServiceDownload(name)
+	actualContent, err := invokeServiceDownload(name)
 
-	assertFileContent(path, actualContent)
+	if err != nil {
+		if forceSuccess {
+			log.Fatal(err)
+		}
+		log.Printf("WARN: Failed to download file %q: %s", name, err.Error())
+	} else if err == nil {
+		assertFileContent(path, actualContent)
+	}
 }
 
 func validateService() {
@@ -131,7 +142,7 @@ func validateService() {
 	filePath := path.Join(dirPath, name)
 	generateFile(filePath, FILE_SIZES[sizeLabel])
 
-	runSingleTest(filePath)
+	runSingleTest(filePath, true)
 }
 
 func assertFileContent(expectedFilePath string, actual []byte) {

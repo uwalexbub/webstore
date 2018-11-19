@@ -62,13 +62,24 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
 
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
+		log.Printf("WANR: Failed to read file %q: %s", name, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// An upload request is currently overwriting same file
+	// Return error instead of maintaining locks for each file
+	if len(content) == 0 {
+		err := fmt.Sprintf("WARN: Failed to process download request for file %q as it is currently in use", name)
+		log.Println(err)
+		http.Error(w, err, http.StatusInternalServerError)
 		return
 	}
 
 	decryptedContent := util.Decrypt(content, []byte(ENCRYPTION_KEY))
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write(decryptedContent)
+	log.Printf("Decrypted and returned %q", name)
 }
 
 func logRequestData(r *http.Request) {
