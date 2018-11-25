@@ -18,9 +18,10 @@ import (
 )
 
 var (
-	parallelism = flag.Int("parallelism", 1, "Number of parallel tests running continuously.")
-	bytesMin    = flag.Int("bytes.min", 1*1024*1024, "Lower bound of test data size.")
-	bytesMax    = flag.Int("bytes.max", 10*1024*1024, "Upper bound of amount of test data size.")
+	parallelism  = flag.Int("parallelism", 1, "Number of parallel tests running continuously.")
+	bytesMin     = flag.Int("bytes.min", 1*1024*1024, "Lower bound of test data size.")
+	bytesMax     = flag.Int("bytes.max", 10*1024*1024, "Upper bound of amount of test data size.")
+	downloadsMax = flag.Int("downloads.max", 2, "Upper bound of downloads per upload")
 )
 
 const SERVICE_ENDPOINT = "http://localhost:8080"
@@ -78,7 +79,8 @@ func runContinuousTestAsync(dataBank *[]byte, wg *sync.WaitGroup, stop chan bool
 	log.Println("Test thread started")
 	keepRunning := true
 	for keepRunning {
-		runSingleTest(dataBank, false)
+		downloads := 1 + rand.Intn(*downloadsMax)
+		runSingleTest(dataBank, downloads)
 
 		select {
 		case <-stop:
@@ -91,7 +93,7 @@ func runContinuousTestAsync(dataBank *[]byte, wg *sync.WaitGroup, stop chan bool
 	log.Println("Test thread stopped")
 }
 
-func runSingleTest(dataBank *[]byte, forceSuccess bool) {
+func runSingleTest(dataBank *[]byte, downloads int) {
 	name := util.GetUniqueString(8)
 
 	start := rand.Intn(len(*dataBank) - *bytesMax)
@@ -99,15 +101,16 @@ func runSingleTest(dataBank *[]byte, forceSuccess bool) {
 	expectedBytes := (*dataBank)[start:end]
 
 	invokeUpload(name, expectedBytes)
-	actualBytes, err := invokeDownload(name)
 
-	if err != nil {
-		if forceSuccess {
-			log.Fatal(err)
+	for i := 1; i <= downloads; i++ {
+		actualBytes, err := invokeDownload(name)
+		if err != nil {
+			log.Printf("WARN: Failed to download %q: %s", name, err.Error())
+		} else if err == nil {
+			util.AssertArraysAreEqual(expectedBytes, actualBytes)
 		}
-		log.Printf("WARN: Failed to download %q: %s", name, err.Error())
-	} else if err == nil {
-		util.AssertArraysAreEqual(expectedBytes, actualBytes)
+
+		time.Sleep(time.Millisecond)
 	}
 }
 

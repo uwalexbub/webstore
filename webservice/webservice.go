@@ -9,6 +9,8 @@ import (
 	"path"
 	"regexp"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/uwalexbub/webstore/util"
 )
 
@@ -18,16 +20,64 @@ const ENCRYPTION_KEY = "This is a secret"
 
 var VALID_URL_PATH = regexp.MustCompile("^/(upload|download)/([a-zA-Z0-9\\.\\-]+)$")
 
+type Metrics struct {
+	activeUploadRequests   prometheus.Gauge
+	uploadDuration         prometheus.Summary
+	activeDownloadRequests prometheus.Gauge
+	downloadDuration       prometheus.Summary
+}
+
+var m *Metrics = &Metrics{}
+
 func main() {
 	util.RemoveDir(DATA_DIR)
 	util.EnsureDirExists(DATA_DIR)
+	initMetrics(m)
 
+	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/upload/", makeHttpHandler(uploadHttpHandler))
 	http.HandleFunc("/download/", makeHttpHandler(downloadHttpHandler))
 	http.HandleFunc("/clear/", clearHandler)
 
 	log.Printf("Started webstore service, listenting on %s", SERVICE_ENDPOINT)
 	log.Fatal(http.ListenAndServe(SERVICE_ENDPOINT, nil))
+}
+
+func initMetrics(m *Metrics) {
+	// Metric for number of upload requests
+	m.activeUploadRequests = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "webstore_active_upload_requests",
+			Help: "Nubmer of upload requests",
+		})
+	prometheus.MustRegister(m.activeUploadRequests)
+
+	// Metric for capturaing duration of upload requests
+	m.uploadDuration = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "webstore_upload_duration",
+			Help: "Duration of upload requests in seconds",
+			// Aggregate 0.5, 0.9 and 0.99 percentiles
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		})
+	prometheus.MustRegister(m.uploadDuration)
+
+	// Metric for number of download requests
+	m.activeDownloadRequests = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "webstore_active_download_requests",
+			Help: "Nubmer of download requests",
+		})
+	prometheus.MustRegister(m.activeDownloadRequests)
+
+	m.downloadDuration = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "webstore_download_duration",
+			Help: "Duration of download requests in seconds",
+			// Aggregate 0.5, 0.9 and 0.99 percentiles
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		})
+	prometheus.MustRegister(m.downloadDuration)
 }
 
 func makeHttpHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
@@ -41,8 +91,14 @@ func makeHttpHandler(fn func(http.ResponseWriter, *http.Request, string)) http.H
 
 func uploadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Printf("Processing upload request for file %q\n", name)
-
 	//logRequestData(r)
+
+	// Emit metrics
+	timer := prometheus.NewTimer(m.uploadDuration)
+	defer timer.ObserveDuration() // 'defer' will execute the statement when parent function returns. See https://tour.golang.org/flowcontrol/12 for details.
+	m.activeUploadRequests.Inc()
+	defer m.activeUploadRequests.Dec()
+
 	content, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("ERROR: Failed to read body of upload request %q: %s", name, err.Error())
@@ -63,6 +119,13 @@ func uploadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
 
 func downloadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Printf("Processing download request for file %q\n", name)
+
+	// Emit metrics
+	timer := prometheus.NewTimer(m.downloadDuration)
+	defer timer.ObserveDuration()
+	m.activeDownloadRequests.Inc()
+	defer m.activeDownloadRequests.Dec()
+
 	path := getFilePath(name)
 	if !util.FileExists(path) {
 		log.Printf("WARN: File %q does not exist\n", path)
