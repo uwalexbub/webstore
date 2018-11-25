@@ -9,7 +9,6 @@ import (
 	"path"
 	"regexp"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/uwalexbub/webstore/util"
 )
 
@@ -23,7 +22,6 @@ func main() {
 	util.RemoveDir(DATA_DIR)
 	util.EnsureDirExists(DATA_DIR)
 
-	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/upload/", makeHttpHandler(uploadHttpHandler))
 	http.HandleFunc("/download/", makeHttpHandler(downloadHttpHandler))
 	http.HandleFunc("/clear/", clearHandler)
