@@ -1,7 +1,6 @@
 package util
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"os"
@@ -49,16 +48,12 @@ func ExitIfError(err error) {
 }
 
 // This function is sourced from https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go
-func GetUniqueValue(prefix string, size int) string {
-	const length = 12
-	b := make([]byte, length)
+func GetUniqueString(size int) string {
+	b := make([]byte, size)
 	for i := range b {
 		b[i] = AsciiLetters[rand.Intn(len(AsciiLetters))]
 	}
 	result := string(b)
-	if prefix != "" {
-		result = fmt.Sprintf("%s-%s", prefix, result)
-	}
 
 	return result
 }

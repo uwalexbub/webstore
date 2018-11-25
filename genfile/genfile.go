@@ -1,54 +1,35 @@
 package main
 
 import (
-	"fmt"
+	"flag"
 	"log"
 	"os"
 	"path"
-	"strconv"
 
+	"github.com/dustin/go-humanize"
 	"github.com/uwalexbub/webstore/util"
 )
 
-const CONTENT_TYPE = "text/plain"
-
-var FILE_SIZES = map[string]int{
-	"small": 1 * 1024 * 1024,  // 1 MB
-	"large": 10 * 1024 * 1024, // 10 MB
-}
+var (
+	dirPath       = flag.String("dir", "./data", "Path to directory where to create files.")
+	sizeMegabytes = flag.Int("sizeMegabytes", 1, "Size of files in megabytes.")
+	total         = flag.Int("total", 1, "How many files to create.")
+)
 
 func main() {
+	flag.Parse()
 	util.InitRandSeed()
 
-	if len(os.Args) < 4 {
-		printUsageAndExit()
-	}
-
-	// The first element in os.Args array is the executable itself.
-	dirPath := os.Args[1]
-	sizeLabel := os.Args[2]
-	size := FILE_SIZES[sizeLabel]
-	count, _ := strconv.Atoi(os.Args[3])
+	sizeBytes := *sizeMegabytes * 1024 * 1024
 
 	log.Println("Generating files...")
-	util.EnsureDirExists(dirPath)
-	for i := 0; i < count; i++ {
-		name := util.GetUniqueValue(sizeLabel, 12) + ".txt"
-		filePath := path.Join(dirPath, name)
-		log.Printf("Generating file %q with %d bytes of random data", filePath, size)
-		generateFile(filePath, size)
+	util.EnsureDirExists(*dirPath)
+	for i := 0; i < *total; i++ {
+		name := util.GetUniqueString(8) + ".txt"
+		filePath := path.Join(*dirPath, name)
+		log.Printf("Generating file %q with %s of random data", filePath, humanize.Bytes(uint64(sizeBytes)))
+		generateFile(filePath, sizeBytes)
 	}
-}
-
-func printUsageAndExit() {
-	fmt.Println(`Unrecognized arguments. Valid usage is:
-	genfile <dirpath> <size> <count>
-
-	<dirpath>	path to directory where files will be created.
-	<size>		label of size of files to be created. Valid values are 'small' and 'large'.
-	<count>		how many files to create. `)
-
-	os.Exit(1)
 }
 
 // Generates file with random data of specified size and returns its name.

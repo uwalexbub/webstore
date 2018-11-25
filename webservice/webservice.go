@@ -9,38 +9,30 @@ import (
 	"path"
 	"regexp"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/uwalexbub/webstore/util"
 )
 
+const SERVICE_ENDPOINT = "localhost:8080"
 const DATA_DIR = "data"
-
-var VALID_URL_PATH = regexp.MustCompile("^/(upload|download)/([a-zA-Z0-9\\.\\-]+)$")
-
 const ENCRYPTION_KEY = "This is a secret"
 
-var uploadDurations = prometheus.NewSummary(
-	prometheus.SummaryOpts{
-		Name:       "webstore_upload_duration",
-		Help:       "Upload request duration in seconds",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-	})
+var VALID_URL_PATH = regexp.MustCompile("^/(upload|download)/([a-zA-Z0-9\\.\\-]+)$")
 
 func main() {
 	util.RemoveDir(DATA_DIR)
 	util.EnsureDirExists(DATA_DIR)
 
-	prometheus.MustRegister(uploadDurations)
-
 	http.Handle("/metrics", promhttp.Handler())
-	http.HandleFunc("/upload/", makeHandler(uploadHandler))
-	http.HandleFunc("/download/", makeHandler(downloadHandler))
+	http.HandleFunc("/upload/", makeHttpHandler(uploadHttpHandler))
+	http.HandleFunc("/download/", makeHttpHandler(downloadHttpHandler))
 	http.HandleFunc("/clear/", clearHandler)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+
+	log.Printf("Started webstore service, listenting on %s", SERVICE_ENDPOINT)
+	log.Fatal(http.ListenAndServe(SERVICE_ENDPOINT, nil))
 }
 
-func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+func makeHttpHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name, err := getName(w, r)
 		if err == nil {
@@ -49,11 +41,8 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 	}
 }
 
-func uploadHandler(w http.ResponseWriter, r *http.Request, name string) {
+func uploadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Printf("Processing upload request for file %q\n", name)
-
-	timer := prometheus.NewTimer(uploadDurations)
-	defer timer.ObserveDuration()
 
 	//logRequestData(r)
 	content, err := ioutil.ReadAll(r.Body)
@@ -74,7 +63,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Printf("Encrypted and saved %q\n", name)
 }
 
-func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
+func downloadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Printf("Processing download request for file %q\n", name)
 	path := getFilePath(name)
 	if !util.FileExists(path) {
@@ -87,15 +76,6 @@ func downloadHandler(w http.ResponseWriter, r *http.Request, name string) {
 	if err != nil {
 		log.Printf("ERROR: Failed to read file %q: %s", name, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Another upload request is currently overwriting same file
-	// Return error instead of maintaining locks for each file
-	if len(content) == 0 {
-		err := fmt.Sprintf("WARN: Failed to process download request for file %q as it is currently in use", name)
-		log.Println(err)
-		http.Error(w, err, http.StatusInternalServerError)
 		return
 	}
 

@@ -8,6 +8,8 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
 	"time"
 
@@ -16,7 +18,6 @@ import (
 )
 
 var (
-	// help = flag.Bool("help", false, "Print usage of the program.")
 	parallelism = flag.Int("parallelism", 1, "Number of parallel tests running continuously.")
 	bytesMin    = flag.Int("bytes.min", 1*1024*1024, "Lower bound of test data size.")
 	bytesMax    = flag.Int("bytes.max", 10*1024*1024, "Upper bound of amount of test data size.")
@@ -35,7 +36,21 @@ func run() {
 	invokeClear()
 
 	dataBank := generateDataBank()
-	runTests(dataBank)
+
+	wg := sync.WaitGroup{}
+	stopChannel := make(chan bool)
+	startTests(dataBank, &wg, stopChannel)
+
+	quitChannel := make(chan os.Signal)
+	signal.Notify(quitChannel, os.Interrupt)
+
+	// Wait for OS interrupt signal
+	<-quitChannel
+
+	log.Println("Stopping all tests...")
+	stopTests(stopChannel)
+	wg.Wait() // wait for all tests to stop
+	log.Println("Stopped")
 }
 
 func generateDataBank() *[]byte {
@@ -45,26 +60,39 @@ func generateDataBank() *[]byte {
 	return &dataBank
 }
 
-func runTests(dataBank *[]byte) {
-	log.Printf("Starting %d test treads\n", parallelism)
-	wg := sync.WaitGroup{}
+func startTests(dataBank *[]byte, wg *sync.WaitGroup, stopChannel chan bool) {
+	log.Printf("Starting %d test treads\n", *parallelism)
 	for i := 0; i < *parallelism; i++ {
 		wg.Add(1)
-		go runContinuousTestAsync(dataBank, &wg)
+		go runContinuousTestAsync(dataBank, wg, stopChannel)
 	}
-	wg.Wait()
 }
 
-func runContinuousTestAsync(dataBank *[]byte, wg *sync.WaitGroup) {
-	for {
-		runSingleTest(dataBank, false)
-		time.Sleep(time.Millisecond)
+func stopTests(stopChannel chan bool) {
+	for i := 0; i < *parallelism; i++ {
+		stopChannel <- true
 	}
-	// wg.Done()
+}
+
+func runContinuousTestAsync(dataBank *[]byte, wg *sync.WaitGroup, stop chan bool) {
+	log.Println("Test thread started")
+	keepRunning := true
+	for keepRunning {
+		runSingleTest(dataBank, false)
+
+		select {
+		case <-stop:
+			keepRunning = false
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+	wg.Done()
+	log.Println("Test thread stopped")
 }
 
 func runSingleTest(dataBank *[]byte, forceSuccess bool) {
-	name := util.GetUniqueValue("", 12)
+	name := util.GetUniqueString(8)
 
 	start := rand.Intn(len(*dataBank) - *bytesMax)
 	end := start + *bytesMin + rand.Intn(*bytesMax-*bytesMin)
