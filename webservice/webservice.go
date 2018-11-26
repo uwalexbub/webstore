@@ -21,10 +21,15 @@ const ENCRYPTION_KEY = "This is a secret"
 var VALID_URL_PATH = regexp.MustCompile("^/(upload|download)/([a-zA-Z0-9\\.\\-]+)$")
 
 type Metrics struct {
-	activeUploadRequests   prometheus.Gauge
-	uploadDuration         prometheus.Summary
+	activeUploadRequests prometheus.Gauge
+	uploadDuration       prometheus.Summary
+	encryptionDuration   prometheus.Summary
+	writeDuration        prometheus.Summary
+
 	activeDownloadRequests prometheus.Gauge
 	downloadDuration       prometheus.Summary
+	decryptionDuration     prometheus.Summary
+	readDuration           prometheus.Summary
 }
 
 var m *Metrics = &Metrics{}
@@ -52,7 +57,7 @@ func initMetrics(m *Metrics) {
 		})
 	prometheus.MustRegister(m.activeUploadRequests)
 
-	// Metric for capturaing duration of upload requests
+	// Metric for capturing duration of upload requests
 	m.uploadDuration = prometheus.NewSummary(
 		prometheus.SummaryOpts{
 			Name: "webstore_upload_duration",
@@ -61,6 +66,26 @@ func initMetrics(m *Metrics) {
 			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		})
 	prometheus.MustRegister(m.uploadDuration)
+
+	// Metric for capturing duration of encryption
+	m.encryptionDuration = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "webstore_encryption_duration",
+			Help: "Duration of encryption in seconds",
+			// Aggregate 0.5, 0.9 and 0.99 percentiles
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		})
+	prometheus.MustRegister(m.encryptionDuration)
+
+	// Metric for capturing duration of writing to file
+	m.writeDuration = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "webstore_write_duration",
+			Help: "Duration of write to file in seconds",
+			// Aggregate 0.5, 0.9 and 0.99 percentiles
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		})
+	prometheus.MustRegister(m.writeDuration)
 
 	// Metric for number of download requests
 	m.activeDownloadRequests = prometheus.NewGauge(
@@ -78,6 +103,26 @@ func initMetrics(m *Metrics) {
 			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		})
 	prometheus.MustRegister(m.downloadDuration)
+
+	// Metric for capturing duration of decryption
+	m.decryptionDuration = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "webstore_decryption_duration",
+			Help: "Duration of decryption in seconds",
+			// Aggregate 0.5, 0.9 and 0.99 percentiles
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		})
+	prometheus.MustRegister(m.decryptionDuration)
+
+	// Metric for capturing duration of reading from file
+	m.readDuration = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "webstore_read_duration",
+			Help: "Duration of read from file in seconds",
+			// Aggregate 0.5, 0.9 and 0.99 percentiles
+			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		})
+	prometheus.MustRegister(m.readDuration)
 }
 
 func makeHttpHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
@@ -105,14 +150,19 @@ func uploadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	encryptedContent := util.Encrypt(content, []byte(ENCRYPTION_KEY))
 
+	encTimer := prometheus.NewTimer(m.encryptionDuration)
+	encryptedContent := util.Encrypt(content, []byte(ENCRYPTION_KEY))
+	encTimer.ObserveDuration()
+
+	writeTimer := prometheus.NewTimer(m.writeDuration)
 	err = ioutil.WriteFile(getFilePath(name), encryptedContent, util.DEFAULT_PERMS)
 	if err != nil {
 		log.Printf("ERROR: Failed to write file for upload request %q: %s", name, err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	writeTimer.ObserveDuration()
 
 	log.Printf("Encrypted and saved %q\n", name)
 }
@@ -133,14 +183,19 @@ func downloadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
 		return
 	}
 
+	readTimer := prometheus.NewTimer(m.readDuration)
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Printf("ERROR: Failed to read file %q: %s", name, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	readTimer.ObserveDuration()
 
+	decTimer := prometheus.NewTimer(m.decryptionDuration)
 	decryptedContent := util.Decrypt(content, []byte(ENCRYPTION_KEY))
+	decTimer.ObserveDuration()
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write(decryptedContent)
 	log.Printf("Decrypted and returned %q", name)

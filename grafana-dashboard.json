@@ -214,7 +214,7 @@
         "x": 0,
         "y": 6
       },
-      "id": 4,
+      "id": 15,
       "legend": {
         "avg": false,
         "current": false,
@@ -238,17 +238,31 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "webstore_upload_duration",
+          "expr": "webstore_upload_duration{quantile=\"0.99\"}",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "P{{quantile}}",
+          "legendFormat": "end-to-end",
           "refId": "A"
+        },
+        {
+          "expr": "webstore_encryption_duration{quantile=\"0.99\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "encryption",
+          "refId": "B"
+        },
+        {
+          "expr": "webstore_write_duration{quantile=\"0.99\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "write to file",
+          "refId": "C"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Upload Service Time (seconds)",
+      "title": "Upload Service Time Breakdown",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -267,7 +281,7 @@
           "format": "short",
           "label": null,
           "logBase": 1,
-          "max": null,
+          "max": "0.2",
           "min": null,
           "show": true
         },
@@ -298,7 +312,7 @@
         "x": 12,
         "y": 6
       },
-      "id": 5,
+      "id": 16,
       "legend": {
         "avg": false,
         "current": false,
@@ -322,17 +336,31 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "webstore_download_duration",
+          "expr": "webstore_download_duration{quantile=\"0.99\"}",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "P{{quantile}}",
+          "legendFormat": "end-to-end",
           "refId": "A"
+        },
+        {
+          "expr": "webstore_decryption_duration{quantile=\"0.99\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "decryption",
+          "refId": "B"
+        },
+        {
+          "expr": "webstore_read_duration{quantile=\"0.99\"}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "read from file",
+          "refId": "C"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Download Service Time (seconds)",
+      "title": "Download Service Time Breakdown",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -351,7 +379,7 @@
           "format": "short",
           "label": null,
           "logBase": 1,
-          "max": null,
+          "max": "0.2",
           "min": null,
           "show": true
         },
@@ -636,7 +664,7 @@
     "list": []
   },
   "time": {
-    "from": "now-5m",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {
@@ -667,5 +695,5 @@
   "timezone": "",
   "title": "webstore",
   "uid": "-X5HHIYmz",
-  "version": 12
+  "version": 17
 }
