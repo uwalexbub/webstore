@@ -25,7 +25,6 @@ var (
 )
 
 const SERVICE_ENDPOINT = "http://localhost:8080"
-const CONTENT_TYPE = "text/plain"
 
 func main() {
 	flag.Parse()
@@ -109,7 +108,6 @@ func runSingleTest(dataBank *[]byte, downloads int) {
 		} else if err == nil {
 			util.AssertArraysAreEqual(expectedBytes, actualBytes)
 		}
-
 		time.Sleep(time.Millisecond)
 	}
 }
@@ -119,7 +117,7 @@ func invokeUpload(name string, data []byte) {
 	log.Printf("Uploading %s to %s\n", humanize.Bytes(uint64(len(data))), url)
 
 	reader := bytes.NewReader(data)
-	resp, err := http.Post(url, CONTENT_TYPE, reader)
+	resp, err := http.Post(url, "text/plain", reader)
 	if resp.StatusCode != http.StatusOK {
 		log.Fatalf("Failed to upload: %s\n", resp.Status)
 	}

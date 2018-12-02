@@ -2,12 +2,16 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"path"
 	"regexp"
+	"runtime/pprof"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -34,9 +38,24 @@ type Metrics struct {
 
 var m *Metrics = &Metrics{}
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 func main() {
+	flag.Parse()
+
+	// Profile entire program, if specified
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	util.RemoveDir(DATA_DIR)
 	util.EnsureDirExists(DATA_DIR)
+
 	initMetrics(m)
 
 	http.Handle("/metrics", promhttp.Handler())
@@ -45,7 +64,14 @@ func main() {
 	http.HandleFunc("/clear/", clearHandler)
 
 	log.Printf("Started webstore service, listenting on %s", SERVICE_ENDPOINT)
-	log.Fatal(http.ListenAndServe(SERVICE_ENDPOINT, nil))
+	go http.ListenAndServe(SERVICE_ENDPOINT, nil)
+
+	quitChannel := make(chan os.Signal)
+	signal.Notify(quitChannel, os.Interrupt)
+
+	// Wait for OS interrupt signal
+	<-quitChannel
+	log.Printf("Stopped")
 }
 
 func initMetrics(m *Metrics) {
@@ -135,7 +161,7 @@ func makeHttpHandler(fn func(http.ResponseWriter, *http.Request, string)) http.H
 }
 
 func uploadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
-	log.Printf("Processing upload request for file %q\n", name)
+	log.Printf("Processing upload request %q\n", name)
 	//logRequestData(r)
 
 	// Emit metrics
@@ -168,7 +194,7 @@ func uploadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
 }
 
 func downloadHttpHandler(w http.ResponseWriter, r *http.Request, name string) {
-	log.Printf("Processing download request for file %q\n", name)
+	log.Printf("Processing download request %q\n", name)
 
 	// Emit metrics
 	timer := prometheus.NewTimer(m.downloadDuration)
