@@ -15,7 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 2,
+  "id": 3,
+  "iteration": 1543732314779,
   "links": [],
   "panels": [
     {
@@ -23,10 +24,10 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "prometheus-local",
+      "datasource": null,
       "fill": 1,
       "gridPos": {
-        "h": 6,
+        "h": 7,
         "w": 12,
         "x": 0,
         "y": 0
@@ -55,25 +56,38 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "webstore_active_upload_requests",
+          "expr": "1.0 - sum(rate(node_cpu_seconds_total{mode=\"idle\",job=\"$JOB\"}[10s])) / 4",
           "format": "time_series",
-          "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Active Uploads",
+          "legendFormat": "total",
           "refId": "A"
         },
         {
-          "expr": "webstore_active_download_requests",
+          "expr": "sum(rate(node_cpu_seconds_total{mode=\"system\",job=\"$JOB\"}[10s])) / 4",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "Active Downloads",
+          "legendFormat": "system",
           "refId": "B"
+        },
+        {
+          "expr": "sum(rate(node_cpu_seconds_total{mode=\"user\",job=\"$JOB\"}[10s])) / 4",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "user",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(node_cpu_seconds_total{mode=\"iowait\",job=\"$JOB\"}[10s])) / 4",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "iowait",
+          "refId": "D"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Active Requests",
+      "title": "CPU Usage",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -89,10 +103,11 @@
       },
       "yaxes": [
         {
-          "format": "short",
-          "label": null,
+          "decimals": 1,
+          "format": "percentunit",
+          "label": "",
           "logBase": 1,
-          "max": null,
+          "max": "1",
           "min": null,
           "show": true
         },
@@ -115,15 +130,15 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": null,
+      "datasource": "prometheus-local",
       "fill": 1,
       "gridPos": {
-        "h": 6,
+        "h": 7,
         "w": 12,
         "x": 12,
         "y": 0
       },
-      "id": 9,
+      "id": 4,
       "legend": {
         "avg": false,
         "current": false,
@@ -147,24 +162,38 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(webstore_upload_duration_count{instance=\"localhost:8080\"}[10s])",
+          "expr": "node_memory_MemTotal_bytes",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "Upload RPS",
+          "legendFormat": "total",
           "refId": "A"
         },
         {
-          "expr": "rate(webstore_download_duration_count{instance=\"localhost:8080\"}[10s])",
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemFree_bytes",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "Download RPS",
+          "legendFormat": "used",
           "refId": "B"
+        },
+        {
+          "expr": "node_memory_Cached_bytes",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "cached",
+          "refId": "C"
+        },
+        {
+          "expr": "node_memory_Buffers_bytes",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "buffered",
+          "refId": "D"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Requests per Second",
+      "title": "Memory Usage",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -180,7 +209,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "decbytes",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -189,7 +218,7 @@
         },
         {
           "format": "short",
-          "label": null,
+          "label": "",
           "logBase": 1,
           "max": null,
           "min": null,
@@ -209,20 +238,21 @@
       "datasource": null,
       "fill": 1,
       "gridPos": {
-        "h": 9,
+        "h": 7,
         "w": 12,
         "x": 0,
-        "y": 6
+        "y": 7
       },
-      "id": 15,
+      "id": 7,
       "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": true,
         "show": true,
         "total": false,
-        "values": false
+        "values": true
       },
       "lines": true,
       "linewidth": 1,
@@ -238,213 +268,24 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "webstore_upload_duration{quantile=\"0.99\"}",
+          "expr": "rate(node_disk_reads_completed_total{device=\"sda\"}[10s])",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "end-to-end",
+          "legendFormat": "read",
           "refId": "A"
         },
         {
-          "expr": "webstore_encryption_duration{quantile=\"0.99\"}",
+          "expr": "rate(node_disk_writes_completed_total{device=\"sda\"}[10s])",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "encryption",
+          "legendFormat": "write",
           "refId": "B"
-        },
-        {
-          "expr": "webstore_write_duration{quantile=\"0.99\"}",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "write to file",
-          "refId": "C"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Upload Service Time Breakdown",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": "0.2",
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": null,
-      "fill": 1,
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 6
-      },
-      "id": 16,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "webstore_download_duration{quantile=\"0.99\"}",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "end-to-end",
-          "refId": "A"
-        },
-        {
-          "expr": "webstore_decryption_duration{quantile=\"0.99\"}",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "decryption",
-          "refId": "B"
-        },
-        {
-          "expr": "webstore_read_duration{quantile=\"0.99\"}",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "read from file",
-          "refId": "C"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Download Service Time Breakdown",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": "0.2",
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": null,
-      "fill": 1,
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 15
-      },
-      "id": 11,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 5,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "rate(process_cpu_seconds_total{instance=\"localhost:8080\"}[10s]) / 4",
-          "format": "time_series",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "CPU Utilization",
+      "title": "Disk I/O Requests",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -489,12 +330,12 @@
       "datasource": "prometheus-local",
       "fill": 1,
       "gridPos": {
-        "h": 9,
+        "h": 7,
         "w": 12,
         "x": 12,
-        "y": 15
+        "y": 7
       },
-      "id": 7,
+      "id": 5,
       "legend": {
         "avg": false,
         "current": false,
@@ -518,24 +359,31 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "go_memstats_alloc_bytes / 1024 / 1024",
+          "expr": "node_memory_SwapTotal_bytes",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "Allocated Megabytes",
+          "legendFormat": "total",
           "refId": "A"
         },
         {
-          "expr": "go_memstats_next_gc_bytes / 1024 / 1024",
+          "expr": "(node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes)/ 1024 / 1024",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "Next Garbage Collection Megabytes",
+          "legendFormat": "used",
           "refId": "B"
+        },
+        {
+          "expr": "node_memory_SwapCached_bytes",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "cached",
+          "refId": "C"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Go Memory Usage vs to be Garbage-Collected (Megabytes)",
+      "title": "Swap Usage",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -551,7 +399,99 @@
       },
       "yaxes": [
         {
+          "format": "decbytes",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
           "format": "short",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": null,
+      "fill": 1,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 8,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": true,
+        "show": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 5,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "rate(node_disk_read_bytes_total{device=\"sda\"}[10s])",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "read",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_disk_written_bytes_total{device=\"sda\"}[10s])",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "write",
+          "refId": "B"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Disk I/O Bytes",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "Bps",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -580,20 +520,21 @@
       "datasource": null,
       "fill": 1,
       "gridPos": {
-        "h": 9,
+        "h": 7,
         "w": 12,
-        "x": 0,
-        "y": 24
+        "x": 12,
+        "y": 14
       },
-      "id": 13,
+      "id": 9,
       "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "max": true,
+        "min": true,
         "show": true,
         "total": false,
-        "values": false
+        "values": true
       },
       "lines": true,
       "linewidth": 1,
@@ -609,17 +550,24 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "go_goroutines{instance=\"localhost:8080\"}",
+          "expr": "rate(node_disk_read_time_seconds_total{device=\"sda\"}[10s])",
           "format": "time_series",
           "intervalFactor": 1,
-          "legendFormat": "Go routines",
+          "legendFormat": "read",
           "refId": "A"
+        },
+        {
+          "expr": "rate(node_disk_write_time_seconds_total{device=\"sda\"}[10s])",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "legendFormat": "write",
+          "refId": "B"
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Go Routines",
+      "title": "Disk I/O Time",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -635,7 +583,7 @@
       },
       "yaxes": [
         {
-          "format": "short",
+          "format": "s",
           "label": null,
           "logBase": 1,
           "max": null,
@@ -657,14 +605,35 @@
       }
     }
   ],
+  "refresh": "10s",
   "schemaVersion": 16,
   "style": "dark",
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "text": "node",
+          "value": "node"
+        },
+        "hide": 0,
+        "label": null,
+        "name": "JOB",
+        "options": [
+          {
+            "selected": true,
+            "text": "node",
+            "value": "node"
+          }
+        ],
+        "query": "node",
+        "skipUrlSync": false,
+        "type": "constant"
+      }
+    ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {
@@ -693,7 +662,7 @@
     ]
   },
   "timezone": "",
-  "title": "webstore",
-  "uid": "-X5HHIYmz",
-  "version": 17
+  "title": "system",
+  "uid": "3OqssULmz",
+  "version": 10
 }

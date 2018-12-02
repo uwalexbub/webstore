@@ -1,22 +1,33 @@
 # About
 
-The focus of this project is:
-* Learn Go language and how to build web applications with it
-* Learn how to instrument Go code with metrics, collect and visualize them
-* Explore Linux tools for monitoring and collecting system and application performance metrics and how to interpret them in the context of the application.
-* Learn how to profile Go code and identify bottlenecks
+This project implements a simple HTTP storage service and a test client that runs configurable parallel load tests against the service. The code of the service is instrumented with metrics using Prometheus client library.
 
-This project implements a simple HTTP storage service and a client that runs performance tests against the service.
+# Prerequisites
 
-The service exposes HTTP APIs to:
-* upload text with specified name
-* download previously uploaded text by specified name
-* 'clear' the service's internal storage: internally service saves texts as files
+* Install Go: https://golang.org/doc/install
+* Clone this repository in your go src directory.
 
-The service encrypts the text upon upload and decrypts upon download using simple symmetric encryption with a secret key.
+# Test
 
-The client runs a specified number of continuous tests in parallel, where each test:
-* calls service to upload random text data of random sizes (within specified bounds) with randomly generated name
-* calls service to download the uploaded text by specified name
-* asserts that downloaded downloads the and calls upload and download HTTP APIs to test the service
-* sleeps and repeats
+```
+cd util
+go test
+```
+
+# Build & Run webservice
+
+```
+cd webservice
+go get
+go build
+./webservice
+```
+
+# Build & Run testclient
+
+```
+cd testclient
+go get
+go build
+./testclient --parallelism=10 --bytes.min=1000000 --bytes.max=5000000 --downloads.max=2
+```
